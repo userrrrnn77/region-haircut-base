@@ -7,7 +7,7 @@ import { deleteFromCloudinary } from "../middleware/uploadMiddleware.ts";
 
 export interface AuthRequest extends Request {
   user?: UserDocument;
-  file?: Express.Multer.File; // jembot masalahnya cuma disini doang bre harus pake "?" memek
+  file?: Express.Multer.File; 
 }
 
 const generateToken = (userId: string, role: string): string => {
