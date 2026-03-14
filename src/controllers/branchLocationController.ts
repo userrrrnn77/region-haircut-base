@@ -7,7 +7,7 @@ import UserModel, { type UserDocument } from "../models/User.ts";
 import AbsensiModel from "../models/Absensi.ts";
 
 interface AuthRequest extends Request {
-  user?: UserDocument
+  user?: UserDocument;
   file?: Express.Multer.File;
 }
 
@@ -97,55 +97,61 @@ export const createBranches = async (req: AuthRequest, res: Response) => {
 export const updateBranches = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { role, lat, lng, ...updateData } = req.body;
+    const { role, lat, lng, radiusMeter, name, code } = req.body;
 
-    if (!id || Array.isArray(id)) {
+    if (!id || !Types.ObjectId.isValid(id)) {
       return res
         .status(400)
-        .json({ success: false, message: "Id tidak valid bre" });
+        .json({ success: false, message: "ID kaga valid, mbot!" });
     }
 
     const branchId = new Types.ObjectId(id);
 
+    // Cek kalo mau ganti role, tapi udah dipake karyawan
     if (role) {
       const isUsed = await UserModel.exists({
-        branchLocations: { $elemMatch: branchId },
+        branchLocations: { $in: [branchId] } as any,
       });
-
       if (isUsed) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Lokasi Sudah di pakai bre" });
+        return res.status(400).json({
+          success: false,
+          message:
+            "Lokasi ini lagi dipake karyawan, role-nya jangan diganti dulu asu!",
+        });
       }
     }
 
     const updateBranch = await BranchModel.findByIdAndUpdate(
       branchId,
       {
-        ...updateData,
-        ...(lat &&
-          lng && {
-            center: {
-              lat: parseFloat(lat),
-              lng: parseFloat(lng),
-            },
-          }),
+        name,
+        code,
+        role,
+        radiusMeter: parseFloat(radiusMeter),
+        center: {
+          lat: parseFloat(lat),
+          lng: parseFloat(lng),
+        },
       },
-      {
-        new: true,
-      },
+      { new: true, runValidators: true },
     );
+
+    if (!updateBranch) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Lokasi ghaib, kaga ketemu!" });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Update berhasil bre Mantap",
+      message: "Update berhasil bre, mantap!",
       data: updateBranch,
     });
-  } catch (error) {
-    console.log(error);
+  } catch (error: any) {
+    console.error("ERROR UPDATE:", error);
     return res
       .status(500)
-      .json({ success: false, message: "Gagal Update Bre mampus" });
+      .json({ success: false, message: "Gagal Update Bre, mampus!" });
   }
 };
 
@@ -155,45 +161,52 @@ export const deleteBranches = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    if (!id || Array.isArray(id)) {
+    if (!id || !Types.ObjectId.isValid(id)) {
       return res
         .status(400)
-        .json({ success: false, message: "Id tidak valid bre" });
+        .json({ success: false, message: "ID kaga valid bre!" });
     }
 
     const branchId = new Types.ObjectId(id);
 
+    // 1. Cek di Absensi (History)
+    // Di model lu: branchLocation (singular)
     const hasHistory = await AbsensiModel.exists({
-      branchLocation: { $elemMatch: branchId },
+      branchLocation: { $in: [branchId] } as any,
     });
 
     if (hasHistory) {
+      // Kalo ada history, jangan hapus permanen biar data kaga corrupt
       await BranchModel.findByIdAndUpdate(branchId, { isActive: false });
-      return res
-        .status(200)
-        .json({ success: true, message: "Berhasil di nonaktifkan bre" });
+      return res.status(200).json({
+        success: true,
+        message: "Berhasil dinonaktifkan bre (karena ada history absen)",
+      });
     }
 
+    // 2. Kalo kaga ada history, hapus permanen
     const locDelete = await BranchModel.findByIdAndDelete(branchId);
     if (!locDelete) {
       return res
         .status(404)
-        .json({ success: false, message: "Gagal Bre Lokasi Udah gada njir" });
+        .json({ success: false, message: "Lokasi emang udah kaga ada njir" });
     }
 
+    // 3. Cabut referensi lokasi ini dari semua User
+    // Pake $pull karena branchLocations di model User adalah array
     await UserModel.updateMany(
-      { branchLocations: { $elemMatch: { $eq: branchId } } },
-      { $pull: { branchLocations: { $in: [branchId] } } },
+      { branchLocations: { $in: [branchId] } as any },
+      { $pull: { branchLocations: branchId } as any },
     );
 
     return res.status(200).json({
       success: true,
-      message: "Sukses Hapus Lokasi Secara Permanen bre",
+      message: "Sukses Hapus Lokasi Secara Permanen bre!",
     });
-  } catch (error) {
-    console.log(error);
+  } catch (error: any) {
+    console.error("ERROR DELETE:", error);
     return res
       .status(500)
-      .json({ success: false, message: "Gagal Hapus Lokasi bre" });
+      .json({ success: false, message: "Gagal Hapus Lokasi bre!" });
   }
 };

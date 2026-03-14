@@ -27,7 +27,7 @@ export interface IAbsensi extends Document {
 const AbsensiSchema = new Schema<IAbsensi>(
   {
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    absensiDayKey: { type: String, required: true, unique: true },
+    absensiDayKey: { type: String, required: true },
     type: {
       type: String,
       enum: ["masuk", "keluar", "sakit"],

@@ -16,13 +16,19 @@ const storage = new CloudinaryStorage({
     let foldername = "general";
     const url = req.originalUrl;
 
-    if (url.includes("absensi")) foldername = "absensi";
+    if (
+      url.includes("check-in") ||
+      url.includes("sakit") ||
+      url.includes("check-out")
+    )
+      foldername = "absensi";
     else if (url.includes("avatar")) foldername = "avatar";
 
     return {
       folder: `region_haircut/${foldername}`,
       allowed_format: ["jpg", "jpeg", "png", "webp"],
       public_id: `${Date.now()}-${path.parse(file.originalname).name}`,
+      // upload_preset: "absen_preset",
     };
   },
 });

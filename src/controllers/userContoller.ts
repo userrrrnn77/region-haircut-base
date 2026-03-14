@@ -9,7 +9,7 @@ import AbsensiModel, { type IAbsensi } from "../models/Absensi.ts";
 import LaporanHarianModel, {
   type ILaporanHarian,
 } from "../models/LaporanHarian.ts";
-import type { Types } from "mongoose";
+import { Types } from "mongoose";
 import { getNowJakarta } from "./absensiController.ts";
 
 interface AuthRequest extends Request {
@@ -173,6 +173,9 @@ export const getDashboardLaporanHarian = async (
 
     // Logika Owner
     if (role === "owner") {
+      const targetDate = nowJakarta.toDate();
+      targetDate.setHours(0, 0, 0, 0);
+
       const [totalUsers, absensiMasuk, totalLaporan, laporanPerUser] =
         await Promise.all([
           UserModel.countDocuments({ role: { $ne: "owner" } }),
@@ -180,14 +183,19 @@ export const getDashboardLaporanHarian = async (
             absensiDayKey: todayKey,
             type: "masuk",
           }),
-          LaporanHarianModel.countDocuments({ tglLaporan: todayKey }),
+          // FIX: Pake reportDate & targetDate
+          LaporanHarianModel.countDocuments({ reportDate: targetDate }),
+
           LaporanHarianModel.aggregate([
-            { $match: { tglLaporan: todayKey } },
+            // FIX: Match pake reportDate (Date Object)
+            { $match: { reportDate: targetDate } },
             {
               $group: {
-                _id: "$userId",
+                // FIX: Pake createdBy (bukan userId)
+                _id: "$createdBy",
                 totalPotong: { $sum: 1 },
-                totalSetoran: { $sum: "$shareOwner" },
+                // FIX: Pake ownerShare (bukan shareOwner)
+                totalSetoran: { $sum: "$ownerShare" },
               },
             },
             {
@@ -212,6 +220,11 @@ export const getDashboardLaporanHarian = async (
 
       const yangKagakMasuk = totalUsers - absensiMasuk;
 
+      const totalRevenue = laporanPerUser.reduce(
+        (a, b) => a + b.totalSetoran,
+        0,
+      );
+
       return res.status(200).json({
         success: true,
         message: "Berhasil Narik data bre",
@@ -222,33 +235,55 @@ export const getDashboardLaporanHarian = async (
           laporanPerUser,
           yangKagakMasuk: yangKagakMasuk < 0 ? 0 : yangKagakMasuk,
         },
-        totalLaporan,
+        summary: {
+          // Lu itung semua jatah di sini bre biar FE tinggal mangap
+          totalRevenue: Math.round(totalRevenue / 0.5), // Balikin ke 100% (karena totalSetoran itu 50% jatah owner)
+          totalOwner: Math.round(totalRevenue), // 50%
+          totalEmployee: Math.round((totalRevenue / 0.5) * 0.4), // 40%
+          totalManagement: Math.round((totalRevenue / 0.5) * 0.1), // 10% ini dia yang lu cari!
+        },
       });
     }
 
     // LOGIKA KARYAWAN langsung gini bre harusnya ya?
 
+    const userObjectId = new Types.ObjectId(id);
+
+    const targetDate = nowJakarta.toDate();
+    targetDate.setHours(0, 0, 0, 0);
+
     const [dataAbsensi, statsLaporan] = await Promise.all([
-      AbsensiModel.findOne({ userId: id, absensiDayKey: todayKey }),
+      // GINI CARA NYARINYA BIAR KAGA "MABAL" PAS LEWAT JAM 12 MALEM
+      AbsensiModel.findOne({
+        user: userObjectId,
+        $or: [
+          { absensiDayKey: todayKey }, // Cari yang hari ini (15)
+          { isIncomplete: true }, // ATAU cari yang belum checkout biarpun dari kemarin (14)
+        ],
+      }).sort({ createdAt: -1 }), // Ambil yang paling baru biar kaga salah data
 
       LaporanHarianModel.aggregate([
-        { $match: { userId: id, tglLaporan: todayKey } },
+        { $match: { createdBy: userObjectId, reportDate: targetDate } },
         {
           $group: {
             _id: null,
             totalKepala: { $sum: 1 },
-            gajiHariIni: { $sum: "$shareKaryawan" },
+            gajiHariIni: { $sum: "$employeeShare" },
           },
         },
       ]),
     ]);
 
     const hasilKerja = statsLaporan[0] || { totalKepala: 0, gajiHariIni: 0 };
+    const statusAbsen = dataAbsensi
+      ? dataAbsensi.type
+      : "Belum Absen, Mabal Lu?!";
+
     return res.status(200).json({
       success: true,
       message: "Nah ini jatah lu hari ini, bre!",
       data: {
-        statusAbsen: dataAbsensi ? dataAbsensi.type : "Belum Absen, Mabal Lu?!",
+        statusAbsen: statusAbsen,
         totalKepala: hasilKerja.totalKepala,
         gajiEstimasi: hasilKerja.gajiHariIni,
         today: todayKey,
@@ -327,7 +362,7 @@ export const updateUserAssignment = async (req: AuthRequest, res: Response) => {
         .filter((b) => b)
         .map((b) => b.trim().toUpperCase().replace(/\s+/g, "_"));
 
-      const workLocDocs = await branchLocations.find({
+      const workLocDocs = await BranchModel.find({
         code: { $in: cleanCodes },
         role: user.role,
         isActive: true,
@@ -341,7 +376,7 @@ export const updateUserAssignment = async (req: AuthRequest, res: Response) => {
       }
 
       user.branchLocations = workLocDocs.map(
-        (loc: IBranchLocations) => loc._id,
+        (loc: IBranchLocations) => loc._id as any,
       );
     }
 

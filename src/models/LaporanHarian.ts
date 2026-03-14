@@ -1,5 +1,6 @@
 // src/models/LaporanHarian.ts
 
+import type { NextFunction } from "express";
 import mongoose, { Schema, Document, Types, Model } from "mongoose";
 
 interface IExpense {
@@ -87,6 +88,18 @@ LaporanHarianSchema.virtual("totalManagementExpenses").get(function () {
     (sum: number, exp: IExpense) => sum + Math.round(exp.amount),
     0,
   );
+});
+
+// src/models/LaporanHarian.ts
+
+LaporanHarianSchema.pre("findOneAndUpdate", function () {
+  const update = this.getUpdate() as any;
+  if (update.totalRevenue) {
+    const rev = update.totalRevenue;
+    update.ownerShare = Math.round(rev * 0.5);
+    update.employeeShare = Math.round(rev * 0.4);
+    update.managementShare = Math.round(rev * 0.1);
+  }
 });
 
 // Virtual: management net setelah pengeluaran

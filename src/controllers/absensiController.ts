@@ -108,6 +108,20 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         .json({ success: false, message: "Sesi Kerja masih aktif" });
     }
 
+    const todayKey = nowJakarta.format("YYYY-MM-DD");
+
+    const sudahAbsen = await AbsensiModel.findOne({
+      user: req.user?._id,
+      absensiDayKey: todayKey,
+    });
+
+    if (sudahAbsen) {
+      return res.status(400).json({
+        status: false,
+        message: "Lu Udah Absen Mbot Hari ini njir, besok lagi mbot",
+      });
+    }
+
     // === Radius Cek ===
     let selectedBranch: any = null;
     let minDistance = Infinity;
@@ -289,7 +303,7 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Sakit Bre ANJING MANTAN GW YANG DARI LAMPUNG JEMBOT KEKMANA NASIB DIA SEKARANG YA? GW UDAH BERISTRI NJIR AMA ORANG KLATEN OKWKKAKWK
+// Absen Sakit MBOT
 
 export const absenSakit = async (req: AuthRequest, res: Response) => {
   try {
