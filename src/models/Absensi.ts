@@ -22,6 +22,8 @@ export interface IAbsensi extends Document {
   location?: { lat: number; lng: number };
   distanceFromCenter?: number;
   note?: string;
+  createdAt: Date; 
+  updatedAt: Date;
 }
 
 const AbsensiSchema = new Schema<IAbsensi>(

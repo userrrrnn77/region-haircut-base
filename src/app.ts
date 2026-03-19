@@ -4,7 +4,7 @@ import express, { type NextFunction, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import indexRoutes from "./routes/indexRoutes.ts";
+import indexRoutes from "./routes/indexRoutes";
 import type { AuthRequest } from "./middleware/authMiddleware.ts";
 
 const app = express();

@@ -6,9 +6,9 @@ import {
   absensiLimiter,
   loginLimiter,
   ownerMiddleware,
-} from "../middleware/authMiddleware.ts";
-import { login, updateMe } from "../controllers/authController.ts";
-import { uploadAvatar } from "../middleware/uploadMiddleware.ts";
+} from "../middleware/authMiddleware";
+import { login, updateMe } from "../controllers/authController";
+import { uploadAvatar } from "../middleware/uploadMiddleware";
 
 const router = Router();
 

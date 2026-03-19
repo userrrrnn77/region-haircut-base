@@ -4,11 +4,11 @@ import { Router } from "express";
 import {
   saveManualReport,
   getLaporanHarian,
-} from "../controllers/laporanHarianController.ts";
+} from "../controllers/laporanHarianController";
 import {
   authMiddleware,
   ownerMiddleware,
-} from "../middleware/authMiddleware.ts";
+} from "../middleware/authMiddleware";
 
 const router = Router();
 

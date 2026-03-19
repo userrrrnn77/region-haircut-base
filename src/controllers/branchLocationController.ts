@@ -2,9 +2,9 @@
 
 import type { Request, Response } from "express";
 import { Types } from "mongoose";
-import BranchModel from "../models/BranchLocations.ts";
-import UserModel, { type UserDocument } from "../models/User.ts";
-import AbsensiModel from "../models/Absensi.ts";
+import BranchModel from "../models/BranchLocations";
+import UserModel, { type UserDocument } from "../models/User";
+import AbsensiModel from "../models/Absensi";
 
 interface AuthRequest extends Request {
   user?: UserDocument;

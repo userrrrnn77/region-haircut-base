@@ -6,7 +6,7 @@ import {
   deleteBranches,
   updateBranches,
   getAllBranchLocations,
-} from "../controllers/branchLocationController.ts";
+} from "../controllers/branchLocationController";
 import { authMiddleware, ownerMiddleware } from "../middleware/authMiddleware";
 
 const router = Router();

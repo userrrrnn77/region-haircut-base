@@ -8,11 +8,11 @@ import {
   deleteUserById,
   updateUserAssignment,
   getDashboardLaporanHarian,
-} from "../controllers/userContoller.ts";
+} from "../controllers/userContoller";
 import {
   authMiddleware,
   ownerMiddleware,
-} from "../middleware/authMiddleware.ts";
+} from "../middleware/authMiddleware";
 
 const router = Router();
 

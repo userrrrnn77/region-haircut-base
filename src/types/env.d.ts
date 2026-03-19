@@ -5,7 +5,7 @@ declare namespace NodeJS {
     JWT_SECRET: string;
     MONGODB_URI: string;
     CLOUDINARY_CLOUD_NAME: string;
-    CLOUDINARY_API_KEY: number;
+    CLOUDINARY_API_KEY: string;
     CLOUDINARY_API_SECRET: string;
     PORT: number;
     JWT_EXPIRES_IN: string;

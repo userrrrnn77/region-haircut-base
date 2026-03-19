@@ -1,21 +1,21 @@
 // src/routes/absensiRoutes.ts
 
 import { Router } from "express";
-import { uploadAbsen } from "../middleware/uploadMiddleware.ts";
+import { uploadAbsen } from "../middleware/uploadMiddleware";
 import {
   checkIn,
   checkOut,
   absenSakit,
   getAllAbsensi,
   getMyAbsensi,
-} from "../controllers/absensiController.ts";
+} from "../controllers/absensiController";
 
-import { chekinValidator } from "../middleware/roleMiddleware.ts";
+import { chekinValidator } from "../middleware/roleMiddleware";
 import {
   absensiLimiter,
   authMiddleware,
   ownerMiddleware,
-} from "../middleware/authMiddleware.ts";
+} from "../middleware/authMiddleware";
 
 const router = Router();
 

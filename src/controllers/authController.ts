@@ -1,9 +1,9 @@
 // src/controllers/authController.ts
 
 import type { Request, Response, NextFunction } from "express";
-import UserModel, { type UserDocument } from "../models/User.ts";
+import UserModel, { type UserDocument } from "../models/User";
 import jwt from "jsonwebtoken";
-import { deleteFromCloudinary } from "../middleware/uploadMiddleware.ts";
+import { deleteFromCloudinary } from "../middleware/uploadMiddleware";
 
 export interface AuthRequest extends Request {
   user?: UserDocument;

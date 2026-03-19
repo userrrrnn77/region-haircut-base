@@ -1,10 +1,9 @@
 // index.ts
 
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config"; // masa ini di tambahin /config bre?
 
-import app from "./src/app.ts";
-import connectDB from "./src/config/db.ts";
+import app from "./src/app";
+import connectDB from "./src/config/db";
 
 const PORT = process.env.PORT || 5000;
 
@@ -14,15 +13,16 @@ const startServer = async () => {
     await connectDB();
     console.log("✅ MongoDB Terkoneksi!");
 
-    // Ganti app.listen lu jadi begini bre!
-    app.listen(PORT as number, "0.0.0.0", () => {
-      console.log(
-        `🚀 Server running in ${process.env.NODE_ENV || "development"} mode`,
-      );
-      console.log(`📍 Local: http://localhost:${PORT}`);
-      console.log(`🌐 Network: http://192.168.1.6:${PORT}`); // Biar lu inget IP nya!
-      console.log("-----------------------------------------");
-    });
+    if (process.env.NODE_ENV !== "production") {
+      app.listen(PORT as number, "0.0.0.0", () => {
+        console.log(
+          `🚀 Server running in ${process.env.NODE_ENV || "development"} mode`,
+        );
+        console.log(`📍 Local: http://localhost:${PORT}`);
+        console.log(`🌐 Network: http://192.168.1.6:${PORT}`); // Biar lu inget IP nya!
+        console.log("-----------------------------------------");
+      });
+    }
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error("❌ Gagal menyalakan server:", error.message);

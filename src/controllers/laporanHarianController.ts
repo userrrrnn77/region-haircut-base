@@ -1,24 +1,26 @@
 // src/controllers/laporanHarianController.ts
 
 import type { Response } from "express";
-import LaporanHarianModel from "../models/LaporanHarian.ts";
-import AbsensiModel from "../models/Absensi.ts";
-import { getNowJakarta, type AuthRequest } from "./absensiController.ts";
+import LaporanHarianModel from "../models/LaporanHarian";
+import AbsensiModel from "../models/Absensi";
+import { getNowJakarta, type AuthRequest } from "./absensiController"; // gw udah pake ini bre
 import { Types } from "mongoose";
+import dayjs from "dayjs";
 
 /**
  * Controller Setor Cuan Akhir Shift
- * Otomatis deteksi Branch dari Absensi Hari Ini
+ * Otomatis deteksi Branch dari Absensi Hari Ini + Opsional Pengeluaran (managementExpenses)
  */
 export const saveManualReport = async (req: AuthRequest, res: Response) => {
   try {
-    const { totalRevenue, notes } = req.body;
+    // 1. Ambil input dari body (managementExpenses sifatnya OPSIONAL)
+    const { totalRevenue, notes, managementExpenses } = req.body;
 
-    // 1. Validasi Input (Padat & Singkat)
-    if (!totalRevenue || totalRevenue < 0) {
+    // Validasi basic omzet
+    if (totalRevenue === undefined || totalRevenue < 0) {
       return res.status(400).json({
         success: false,
-        message: "Input cuan yang bener, mbot! Jangan 0 atau minus!",
+        message: "Input cuan yang bener, mbot! Jangan kosong atau minus!",
       });
     }
 
@@ -27,12 +29,11 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
     const targetDate = nowJakarta.toDate();
     targetDate.setHours(0, 0, 0, 0);
 
-    // 2. OTOMATISASI BRANCH (Link ke GPS Absensi)
-    // Nyari record absen si user hari ini buat tau dia kerja di branch mana
+    // 2. OTOMATISASI BRANCH (Cari lokasi kerja dari absen terakhir hari ini)
     const userAbsensi = await AbsensiModel.findOne({
       user: req.user?._id,
       absensiDayKey: todayKey,
-      type: { $in: ["masuk", "keluar"] }, // Berlaku buat yang masih shift atau udah checkout
+      type: { $in: ["masuk", "keluar"] },
     });
 
     if (!userAbsensi || !userAbsensi.branchLocation) {
@@ -43,8 +44,19 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 3. UPSERT LOGIC (Sesuai Compound Index: Date + Branch + User)
-    // Kalo dia salah input terus input lagi, datanya otomatis ke-update (Upsert)
+    // 3. LOGIC EXPENSES (Proses list jajan/pengeluaran kalo ada)
+    let processedExpenses: any[] = [];
+    if (managementExpenses && Array.isArray(managementExpenses)) {
+      processedExpenses = managementExpenses.map((exp: any) => ({
+        description: exp.description,
+        amount: Math.round(exp.amount),
+        createdBy: req.user?._id, // Siapa yang lapor pengeluaran
+        isVerified: true, // Default false, nunggu Owner ACC
+      }));
+    }
+
+    // 4. UPSERT LOGIC (Sesuai Compound Index: Date + Branch + User)
+    // Otomatis itung share 50-40-10 via Pre-Save Hook di Model
     const report = await LaporanHarianModel.findOneAndUpdate(
       {
         reportDate: targetDate,
@@ -54,7 +66,7 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
       {
         totalRevenue: Math.round(totalRevenue),
         notes: notes || "-",
-        // Field wajib buat document baru (Upsert)
+        managementExpenses: processedExpenses, // Simpan array pengeluaran (kalo kosong ya [])
         reportDate: targetDate,
         branch: userAbsensi.branchLocation,
         createdBy: req.user?._id,
@@ -66,14 +78,15 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
       },
     );
 
-    // 4. RESPONSE (Pre-save hook otomatis ngitung 50-40-10)
+    // 5. RESPONSE (Model otomatis itung employeeShare/jatah 40%)
     return res.status(201).json({
       success: true,
       message: "Setoran Cuan Sukses, Bre! Rektorat Bangga!",
       data: {
         tanggal: todayKey,
         omzet: report.totalRevenue,
-        jatahLu: report.employeeShare, // Info gaji 40% langsung muncul
+        jatahLu: report.employeeShare,
+        totalJajan: (report as any).totalManagementExpenses, // Info total pengeluaran hari ini
         branch: userAbsensi.locationSnapShot?.name || "Lokasi Terdeteksi",
       },
     });
@@ -103,18 +116,23 @@ export const getLaporanHarian = async (req: AuthRequest, res: Response) => {
     }
 
     // 2. LOGIKA FILTER TANGGAL (Daily / Monthly / Range)
+    // Update di getLaporanHarian (Backend)
     if (startDate && endDate) {
-      // Format input FE: "YYYY-MM-DD"
-      const start = new Date(startDate as string);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate as string);
-      end.setHours(23, 59, 59, 999);
+      // Kita paksa start ke 00:00:00 dan end ke 23:59:59 waktu Jakarta
+      // startDate dari FE: "2026-03-01"
+      const start = dayjs
+        .tz(startDate as string, "Asia/Jakarta")
+        .startOf("day")
+        .toDate();
+      const end = dayjs
+        .tz(endDate as string, "Asia/Jakarta")
+        .endOf("day")
+        .toDate();
 
       query.reportDate = { $gte: start, $lte: end };
     } else {
-      // Default: Laporan Hari Ini
-      const today = getNowJakarta().toDate();
-      today.setHours(0, 0, 0, 0);
+      // Default: Ambil hari ini versi Jakarta
+      const today = getNowJakarta().startOf("day").toDate();
       query.reportDate = today;
     }
 
@@ -124,13 +142,15 @@ export const getLaporanHarian = async (req: AuthRequest, res: Response) => {
       .populate("createdBy", "fullname username")
       .sort({ reportDate: -1 });
 
-    // 4. LOGIKA AGGREGATION (Biar FE tinggal pajang Totalan)
+    // 4. LOGIKA AGGREGATION (Summary kumulatif di UI)
     const summary = reports.reduce(
       (acc, curr) => {
         acc.totalRevenue += curr.totalRevenue;
         acc.totalOwner += curr.ownerShare;
         acc.totalEmployee += curr.employeeShare;
         acc.totalManagement += curr.managementShare;
+        // Tambahin ini biar ketauan total jajan di list yang lagi difilter
+        acc.totalExpenses += (curr as any).totalManagementExpenses || 0;
         return acc;
       },
       {
@@ -138,14 +158,21 @@ export const getLaporanHarian = async (req: AuthRequest, res: Response) => {
         totalOwner: 0,
         totalEmployee: 0,
         totalManagement: 0,
+        totalExpenses: 0, // Inisialisasi awal
       },
     );
 
     return res.status(200).json({
       success: true,
       message: "Data Laporan Berhasil Ditarik, Bre!",
-      summary, // Totalan buat dipajang di atas tabel
-      data: reports, // Detail baris per baris
+      summary: {
+        ...summary,
+        // Kalkulasi sisa dompet management setelah jajan
+        managementNet: summary.totalManagement - summary.totalExpenses,
+        // Angka keramat: Duit fisik yang harus lu terima
+        totalCashToDeposit: summary.totalRevenue - summary.totalExpenses,
+      },
+      data: reports,
     });
   } catch (error: any) {
     console.error("ERR_GET_LAPORAN:", error.message);

@@ -2,7 +2,7 @@
 
 import multer, { type FileFilterCallback } from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
-import cloudinary from "../config/cloudinary.ts";
+import cloudinary from "../config/cloudinary";
 import type { Request } from "express";
 import path from "path";
 
@@ -10,9 +10,12 @@ import path from "path";
 // logic updload foto absen dan avatar
 // ===================================
 
+// kalo mau pake upload manual tapi ga stabil njir suka race condition
+
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req: Request, file: Express.Multer.File) => {
+    console.log("UPLOAD PATH", req.path);
     let foldername = "general";
     const url = req.originalUrl;
 
@@ -20,15 +23,17 @@ const storage = new CloudinaryStorage({
       url.includes("check-in") ||
       url.includes("sakit") ||
       url.includes("check-out")
-    )
+    ) {
       foldername = "absensi";
-    else if (url.includes("avatar")) foldername = "avatar";
+    } else if (url.includes("avatar")) {
+      foldername = "avatar";
+    }
 
     return {
       folder: `region_haircut/${foldername}`,
-      allowed_format: ["jpg", "jpeg", "png", "webp"],
+      allowed_formats: ["jpg", "jpeg", "png", "webp"],
       public_id: `${Date.now()}-${path.parse(file.originalname).name}`,
-      // upload_preset: "absen_preset",
+      resource_type: "image",
     };
   },
 });
@@ -47,21 +52,21 @@ const fileFilter = (
   }
 };
 
-// upload avatar
+// ini lebih stabil
 
-export const uploadAvatar = multer({
-  storage,
+const upload = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 4 * 1024 * 1024 },
   fileFilter,
-}).single("avatar");
+});
+
+// upload avatar
+
+export const uploadAvatar = upload.single("avatar");
 
 // upload absen
 
-export const uploadAbsen = multer({
-  storage,
-  limits: { fileSize: 4 * 1024 * 1024 },
-  fileFilter,
-}).single("photo");
+export const uploadAbsen = upload.single("photo");
 
 // ==========================================
 // Delete From Cloudinary biar bandwitch Aman

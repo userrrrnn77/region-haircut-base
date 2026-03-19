@@ -1,16 +1,14 @@
 // src/controllers/userContoller.ts
 
 import type { Request, Response, NextFunction } from "express";
-import UserModel, { type UserDocument } from "../models/User.ts";
-import BranchModel, {
-  type IBranchLocations,
-} from "../models/BranchLocations.ts";
-import AbsensiModel, { type IAbsensi } from "../models/Absensi.ts";
+import UserModel, { type UserDocument } from "../models/User";
+import BranchModel, { type IBranchLocations } from "../models/BranchLocations";
+import AbsensiModel, { type IAbsensi } from "../models/Absensi";
 import LaporanHarianModel, {
   type ILaporanHarian,
-} from "../models/LaporanHarian.ts";
+} from "../models/LaporanHarian";
 import { Types } from "mongoose";
-import { getNowJakarta } from "./absensiController.ts";
+import { getNowJakarta } from "./absensiController";
 
 interface AuthRequest extends Request {
   user?: UserDocument;
@@ -176,54 +174,40 @@ export const getDashboardLaporanHarian = async (
       const targetDate = nowJakarta.toDate();
       targetDate.setHours(0, 0, 0, 0);
 
-      const [totalUsers, absensiMasuk, totalLaporan, laporanPerUser] =
-        await Promise.all([
-          UserModel.countDocuments({ role: { $ne: "owner" } }),
-          AbsensiModel.countDocuments({
-            absensiDayKey: todayKey,
-            type: "masuk",
-          }),
-          // FIX: Pake reportDate & targetDate
-          LaporanHarianModel.countDocuments({ reportDate: targetDate }),
+      const [totalUsers, absensiMasuk, statsGlobal] = await Promise.all([
+        UserModel.countDocuments({ role: { $ne: "owner" } }),
+        AbsensiModel.countDocuments({
+          absensiDayKey: todayKey,
+          type: "masuk",
+        }),
+        // AGGREGATE SAKTI: Itung Omzet, Share, dan Jajan sekaligus
+        LaporanHarianModel.aggregate([
+          { $match: { reportDate: targetDate } },
+          {
+            $group: {
+              _id: null,
+              totalRevenue: { $sum: "$totalRevenue" },
+              totalOwner: { $sum: "$ownerShare" },
+              totalEmployee: { $sum: "$employeeShare" },
+              totalManagement: { $sum: "$managementShare" },
+              // ITUNG SEMUA JAJANAN HARI INI
+              totalJajan: { $sum: { $sum: "$managementExpenses.amount" } },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+      ]);
 
-          LaporanHarianModel.aggregate([
-            // FIX: Match pake reportDate (Date Object)
-            { $match: { reportDate: targetDate } },
-            {
-              $group: {
-                // FIX: Pake createdBy (bukan userId)
-                _id: "$createdBy",
-                totalPotong: { $sum: 1 },
-                // FIX: Pake ownerShare (bukan shareOwner)
-                totalSetoran: { $sum: "$ownerShare" },
-              },
-            },
-            {
-              $lookup: {
-                from: "users",
-                localField: "_id",
-                foreignField: "_id",
-                as: "userDetails",
-              },
-            },
-            { $unwind: "$userDetails" },
-            {
-              $project: {
-                _id: 1,
-                totalPotong: 1,
-                totalSetoran: 1,
-                namaKaryawan: "$userDetails.fullname",
-              },
-            },
-          ]),
-        ]);
+      const s = statsGlobal[0] || {
+        totalRevenue: 0,
+        totalOwner: 0,
+        totalEmployee: 0,
+        totalManagement: 0,
+        totalJajan: 0,
+        count: 0,
+      };
 
       const yangKagakMasuk = totalUsers - absensiMasuk;
-
-      const totalRevenue = laporanPerUser.reduce(
-        (a, b) => a + b.totalSetoran,
-        0,
-      );
 
       return res.status(200).json({
         success: true,
@@ -231,16 +215,19 @@ export const getDashboardLaporanHarian = async (
         data: {
           totalKaryawan: totalUsers,
           absensiMasuk,
-          totalLaporan,
-          laporanPerUser,
+          totalLaporan: s.count,
           yangKagakMasuk: yangKagakMasuk < 0 ? 0 : yangKagakMasuk,
         },
         summary: {
-          // Lu itung semua jatah di sini bre biar FE tinggal mangap
-          totalRevenue: Math.round(totalRevenue / 0.5), // Balikin ke 100% (karena totalSetoran itu 50% jatah owner)
-          totalOwner: Math.round(totalRevenue), // 50%
-          totalEmployee: Math.round((totalRevenue / 0.5) * 0.4), // 40%
-          totalManagement: Math.round((totalRevenue / 0.5) * 0.1), // 10% ini dia yang lu cari!
+          totalRevenue: s.totalRevenue,
+          totalOwner: s.totalOwner,
+          totalEmployee: s.totalEmployee,
+          // INI DIA: Management Bruto dikurangin Jajan
+          totalManagement: s.totalManagement,
+          managementNet: s.totalManagement - s.totalJajan,
+          totalExpenses: s.totalJajan,
+          // DUIT FISIK YANG WAJIB ADA DI TANGAN
+          totalCashToDeposit: s.totalRevenue - s.totalJajan,
         },
       });
     }
@@ -249,10 +236,11 @@ export const getDashboardLaporanHarian = async (
 
     const userObjectId = new Types.ObjectId(id);
 
-    const targetDate = nowJakarta.toDate();
-    targetDate.setHours(0, 0, 0, 0);
+    const startOfToday = nowJakarta.startOf("day").toDate();
 
-    const [dataAbsensi, statsLaporan] = await Promise.all([
+    const startOfMonth = nowJakarta.startOf("month").toDate();
+
+    const [dataAbsensi, statsLaporan, statsBulanan] = await Promise.all([
       // GINI CARA NYARINYA BIAR KAGA "MABAL" PAS LEWAT JAM 12 MALEM
       AbsensiModel.findOne({
         user: userObjectId,
@@ -263,7 +251,7 @@ export const getDashboardLaporanHarian = async (
       }).sort({ createdAt: -1 }), // Ambil yang paling baru biar kaga salah data
 
       LaporanHarianModel.aggregate([
-        { $match: { createdBy: userObjectId, reportDate: targetDate } },
+        { $match: { createdBy: userObjectId, reportDate: startOfToday } },
         {
           $group: {
             _id: null,
@@ -272,9 +260,29 @@ export const getDashboardLaporanHarian = async (
           },
         },
       ]),
+      LaporanHarianModel.aggregate([
+        {
+          $match: {
+            createdBy: userObjectId,
+            reportDate: { $gte: startOfMonth }, // Ambil semua yang >= awal bulan
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalKepalaSebulan: { $sum: 1 },
+            gajiSebulan: { $sum: "$employeeShare" },
+          },
+        },
+      ]),
     ]);
 
     const hasilKerja = statsLaporan[0] || { totalKepala: 0, gajiHariIni: 0 };
+    const hasilBulanan = statsBulanan[0] || {
+      totalKepalaSebulan: 0,
+      gajiSebulan: 0,
+    };
+
     const statusAbsen = dataAbsensi
       ? dataAbsensi.type
       : "Belum Absen, Mabal Lu?!";
@@ -284,8 +292,10 @@ export const getDashboardLaporanHarian = async (
       message: "Nah ini jatah lu hari ini, bre!",
       data: {
         statusAbsen: statusAbsen,
+        checkinTime: dataAbsensi ? (dataAbsensi as IAbsensi).createdAt : null, // ini bre
         totalKepala: hasilKerja.totalKepala,
         gajiEstimasi: hasilKerja.gajiHariIni,
+        totalGajiBulanIni: hasilBulanan.gajiSebulan,
         today: todayKey,
       },
     });

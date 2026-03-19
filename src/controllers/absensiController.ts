@@ -7,7 +7,7 @@ import timezone from "dayjs/plugin/timezone";
 import AbsensiModel, { type IAbsensi } from "../models/Absensi";
 import UserModel, { type UserDocument } from "../models/User";
 import BranchModel, { type IBranchLocations } from "../models/BranchLocations";
-import { deleteFromCloudinary } from "../middleware/uploadMiddleware.ts";
+import { deleteFromCloudinary } from "../middleware/uploadMiddleware";
 import { Types } from "mongoose";
 
 dayjs.extend(utc);
@@ -96,23 +96,40 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // === Cek sesi Terbuka ===
+    // === Cek sesi Terbuka & Reset Otomatis jam 00.00 ===
+
+    const todayKey = nowJakarta.format("YYYY-MM-DD");
+
     const openSession = await AbsensiModel.findOne({
       user: new Types.ObjectId(user._id),
       isIncomplete: true,
     });
 
     if (openSession) {
-      return res
-        .status(409)
-        .json({ success: false, message: "Sesi Kerja masih aktif" });
+      if (openSession.absensiDayKey !== todayKey) {
+        // Kita anggap sesi kemaren hangus/tutup paksa
+        await AbsensiModel.findByIdAndUpdate(openSession._id, {
+          isIncomplete: false,
+          note:
+            (openSession.note || "") +
+            " (Sesi ditutup otomatis oleh sistem karena ganti hari)",
+        });
+        // Setelah ditutup, lanjut proses check-in hari ini...
+      } else {
+        // Kalo emang masih hari yang sama, baru kita blokir
+        return res
+          .status(409)
+          .json({
+            success: false,
+            message: "Lu udah check-in tadi bre, sesi masih aktif!",
+          });
+      }
     }
-
-    const todayKey = nowJakarta.format("YYYY-MM-DD");
 
     const sudahAbsen = await AbsensiModel.findOne({
       user: req.user?._id,
       absensiDayKey: todayKey,
+      type: "masuk"
     });
 
     if (sudahAbsen) {
