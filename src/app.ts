@@ -5,7 +5,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import indexRoutes from "./routes/indexRoutes";
-import type { AuthRequest } from "./middleware/authMiddleware.ts";
+import type { AuthRequest } from "./middleware/authMiddleware";
 
 const app = express();
 

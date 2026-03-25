@@ -3,7 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "lib": ["ESNext"],
-    "moduleResolution": "Node",
+    "moduleResolution": "node",
     "allowJs": true,
     "strict": true,
     "isolatedModules": true,
@@ -16,7 +16,8 @@
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*", "src/*"]
-    }
+    },
+    "types": ["node"]
   },
   "include": ["index.ts", "src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
