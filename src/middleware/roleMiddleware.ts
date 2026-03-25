@@ -1,7 +1,7 @@
 // src/middleware/authMiddlewares.ts
 
 import type { Request, Response, NextFunction } from "express";
-import type { UserDocument } from "../models/User";
+import type { UserDocument } from "../models/User.js";
 
 export interface AuthRequest extends Request {
   user?: UserDocument;

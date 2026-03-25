@@ -1,14 +1,14 @@
 // src/controllers/userContoller.ts
 
 import type { Request, Response, NextFunction } from "express";
-import UserModel, { type UserDocument } from "../models/User";
-import BranchModel, { type IBranchLocations } from "../models/BranchLocations";
-import AbsensiModel, { type IAbsensi } from "../models/Absensi";
+import UserModel, { type UserDocument } from "../models/User.js";
+import BranchModel, { type IBranchLocations } from "../models/BranchLocations.js";
+import AbsensiModel, { type IAbsensi } from "../models/Absensi.js";
 import LaporanHarianModel, {
   type ILaporanHarian,
-} from "../models/LaporanHarian";
+} from "../models/LaporanHarian.js";
 import { Types } from "mongoose";
-import { getNowJakarta } from "./absensiController";
+import { getNowJakarta } from "./absensiController.js";
 
 interface AuthRequest extends Request {
   user?: UserDocument;

@@ -6,8 +6,8 @@ import {
   deleteBranches,
   updateBranches,
   getAllBranchLocations,
-} from "../controllers/branchLocationController";
-import { authMiddleware, ownerMiddleware } from "../middleware/authMiddleware";
+} from "../controllers/branchLocationController.js";
+import { authMiddleware, ownerMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 

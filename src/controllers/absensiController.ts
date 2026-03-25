@@ -2,12 +2,12 @@
 
 import type { Request, Response } from "express";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
-import AbsensiModel, { type IAbsensi } from "../models/Absensi";
-import UserModel, { type UserDocument } from "../models/User";
-import BranchModel, { type IBranchLocations } from "../models/BranchLocations";
-import { deleteFromCloudinary } from "../middleware/uploadMiddleware";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+import AbsensiModel, { type IAbsensi } from "../models/Absensi.js";
+import UserModel, { type UserDocument } from "../models/User.js";
+import BranchModel, { type IBranchLocations } from "../models/BranchLocations.js";
+import { deleteFromCloudinary } from "../middleware/uploadMiddleware.js";
 import { Types } from "mongoose";
 
 dayjs.extend(utc);

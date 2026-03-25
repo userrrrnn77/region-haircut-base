@@ -16,7 +16,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "backend": ".",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.6",

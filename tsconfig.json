@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "ESNext",
+    "module": "NodeNext",
     "lib": ["ESNext"],
-    "moduleResolution": "node",
+    "moduleResolution": "NodeNext", 
     "allowJs": true,
     "strict": true,
     "isolatedModules": true,
@@ -13,6 +13,7 @@
     "allowSyntheticDefaultImports": true,
     "noEmit": false,
     "outDir": "dist",
+    
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*", "src/*"]

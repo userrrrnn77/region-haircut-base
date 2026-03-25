@@ -3,11 +3,11 @@
 import { Router } from "express";
 
 // routes
-import authRoutes from "./authRoutes";
-import userRoutes from "./userRoutes";
-import absensiRoutes from "./absensiRoutes";
-import branchRoutes from "./brancRoutes";
-import laporanRoutes from "./laporanRoutes";
+import authRoutes from "./authRoutes.js";
+import userRoutes from "./userRoutes.js";
+import absensiRoutes from "./absensiRoutes.js";
+import branchRoutes from "./brancRoutes.js";
+import laporanRoutes from "./laporanRoutes.js";
 
 const router = Router();
 

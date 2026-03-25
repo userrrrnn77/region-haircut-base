@@ -2,7 +2,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import UserModel, { type UserDocument } from "../models/User";
+import UserModel, { type UserDocument } from "../models/User.js";
 import rateLimit from "express-rate-limit";
 
 interface JwtPayload {

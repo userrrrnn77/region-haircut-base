@@ -2,7 +2,7 @@
 
 import multer, { type FileFilterCallback } from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
-import cloudinary from "../config/cloudinary";
+import cloudinary from "../config/cloudinary.js";
 import type { Request } from "express";
 import path from "path";
 

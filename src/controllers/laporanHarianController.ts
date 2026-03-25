@@ -1,9 +1,9 @@
 // src/controllers/laporanHarianController.ts
 
 import type { Response } from "express";
-import LaporanHarianModel from "../models/LaporanHarian";
-import AbsensiModel from "../models/Absensi";
-import { getNowJakarta, type AuthRequest } from "./absensiController"; // gw udah pake ini bre
+import LaporanHarianModel from "../models/LaporanHarian.js";
+import AbsensiModel from "../models/Absensi.js";
+import { getNowJakarta, type AuthRequest } from "./absensiController.js"; 
 import { Types } from "mongoose";
 import dayjs from "dayjs";
 
