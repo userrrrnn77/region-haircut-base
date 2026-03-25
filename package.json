@@ -16,6 +16,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "backend": ".",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.6",
@@ -32,7 +33,7 @@
   },
   "scripts": {
     "dev": "bun --watch index.ts",
-    "start": "bun index.ts",
+    "start": "node dist/index.js",
     "build": "tsc",
     "vercel-build": "tsc"
   }
