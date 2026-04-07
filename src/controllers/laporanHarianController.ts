@@ -3,7 +3,7 @@
 import type { Response } from "express";
 import LaporanHarianModel from "../models/LaporanHarian.js";
 import AbsensiModel from "../models/Absensi.js";
-import { getNowJakarta, type AuthRequest } from "./absensiController.js"; 
+import { getNowJakarta, type AuthRequest } from "./absensiController.js";
 import { Types } from "mongoose";
 import dayjs from "dayjs";
 
@@ -44,6 +44,25 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    let lateDeduction = 0;
+    let autoNote = "-";
+
+    if (userAbsensi.checkin) {
+      const checkInTime = dayjs(userAbsensi.checkin).tz("Asia/Jakarta");
+
+      const limitTime = checkInTime
+        .startOf("day")
+        .hour(12)
+        .minute(10)
+        .second(0);
+
+      if (checkInTime.isAfter(limitTime)) {
+        lateDeduction = 5000;
+        autoNote =
+          `${autoNote} (Potongan Telat 5rb - Checkin: ${checkInTime.format("HH:mm")})`.trim();
+      }
+    }
+
     // 3. LOGIC EXPENSES (Proses list jajan/pengeluaran kalo ada)
     let processedExpenses: any[] = [];
     if (managementExpenses && Array.isArray(managementExpenses)) {
@@ -65,7 +84,7 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
       },
       {
         totalRevenue: Math.round(totalRevenue),
-        notes: notes || "-",
+        notes: autoNote || "-",
         managementExpenses: processedExpenses, // Simpan array pengeluaran (kalo kosong ya [])
         reportDate: targetDate,
         branch: userAbsensi.branchLocation,
@@ -78,16 +97,39 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
       },
     );
 
+    if (lateDeduction > 0 && report) {
+      const finalEmployeeShare = report.employeeShare - lateDeduction;
+      const finalManagementShare = report.managementShare + lateDeduction;
+
+      await LaporanHarianModel.updateOne(
+        { _id: report._id },
+
+        {
+          $set: {
+            employeeShare: finalEmployeeShare,
+            managementShare: finalManagementShare,
+          },
+        },
+      );
+
+      report.employeeShare = finalEmployeeShare;
+      report.managementShare = finalManagementShare;
+    }
+
     // 5. RESPONSE (Model otomatis itung employeeShare/jatah 40%)
     return res.status(201).json({
       success: true,
-      message: "Setoran Cuan Sukses, Bre! Rektorat Bangga!",
+      message:
+        lateDeduction > 0
+          ? "Setor Cuan Sukses (Ada potongan telat!)"
+          : "Setoran Cuan Sukses, Bre!",
       data: {
         tanggal: todayKey,
         omzet: report.totalRevenue,
         jatahLu: report.employeeShare,
         totalJajan: (report as any).totalManagementExpenses, // Info total pengeluaran hari ini
         branch: userAbsensi.locationSnapShot?.name || "Lokasi Terdeteksi",
+        lateDeduction: lateDeduction,
       },
     });
   } catch (error: any) {
@@ -149,8 +191,14 @@ export const getLaporanHarian = async (req: AuthRequest, res: Response) => {
         acc.totalOwner += curr.ownerShare;
         acc.totalEmployee += curr.employeeShare;
         acc.totalManagement += curr.managementShare;
-        // Tambahin ini biar ketauan total jajan di list yang lagi difilter
         acc.totalExpenses += (curr as any).totalManagementExpenses || 0;
+
+        // TRIK SENYAP: Cek apakah di notes ada tulisan "Potongan Telat"
+        // Karena tadi di saveManualReport kita selipin tulisan itu di notes
+        if (curr.notes && curr.notes.includes("Potongan Telat 5rb")) {
+          acc.totalLateDeduction += 5000;
+        }
+
         return acc;
       },
       {
@@ -158,7 +206,8 @@ export const getLaporanHarian = async (req: AuthRequest, res: Response) => {
         totalOwner: 0,
         totalEmployee: 0,
         totalManagement: 0,
-        totalExpenses: 0, // Inisialisasi awal
+        totalExpenses: 0,
+        totalLateDeduction: 0, // Tambahin inisialisasi ini
       },
     );
 

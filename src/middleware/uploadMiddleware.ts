@@ -33,7 +33,6 @@ const storage = new CloudinaryStorage({
       folder: `region_haircut/${foldername}`,
       allowed_formats: ["jpg", "jpeg", "png", "webp"],
       public_id: `${Date.now()}-${path.parse(file.originalname).name}`,
-      resource_type: "image",
     };
   },
 });
@@ -55,7 +54,7 @@ const fileFilter = (
 // ini lebih stabil
 
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: storage,
   limits: { fileSize: 4 * 1024 * 1024 },
   fileFilter,
 });
