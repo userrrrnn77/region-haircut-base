@@ -3,7 +3,9 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import UserModel, { type UserDocument } from "../models/User.js";
-import rateLimit from "express-rate-limit";
+import { rateLimit } from "express-rate-limit";
+
+const rateLimitFn: any = rateLimit;
 
 interface JwtPayload {
   id: string;
@@ -80,7 +82,7 @@ export const ownerMiddleware = (allowedRole: string[]) => {
   };
 };
 
-export const loginLimiter = rateLimit({
+export const loginLimiter = rateLimitFn({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: {
@@ -92,7 +94,7 @@ export const loginLimiter = rateLimit({
   validate: { xForwardedForHeader: false },
 });
 
-export const absensiLimiter = rateLimit({
+export const absensiLimiter = rateLimitFn({
   windowMs: 1 * 60 * 1000,
   max: 5,
   message: {
