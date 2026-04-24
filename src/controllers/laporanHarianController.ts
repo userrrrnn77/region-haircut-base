@@ -3,9 +3,16 @@
 import type { Response } from "express";
 import LaporanHarianModel from "../models/LaporanHarian.js";
 import AbsensiModel from "../models/Absensi.js";
-import { getNowJakarta, type AuthRequest } from "./absensiController.js";
+import {
+  getNowJakarta,
+  JAKARTA_TZ,
+  type AuthRequest,
+} from "./absensiController.js";
 import { Types } from "mongoose";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+import ExcelJS from "exceljs";
 
 /**
  * Controller Setor Cuan Akhir Shift
@@ -228,6 +235,228 @@ export const getLaporanHarian = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Gagal narik data laporan: " + error.message,
+    });
+  }
+};
+
+export const exportLaporanHarian = async (req: AuthRequest, res: Response) => {
+  try {
+    const { startDate, endDate, branchId, userId } = req.query;
+    const { _id: currentUserId, role } = req.user!;
+
+    let query: any = {};
+
+    // 1. SECURITY: Karyawan cuma bisa export data sendiri
+    if (role === "karyawan") {
+      query.createdBy = currentUserId;
+    } else if (role === "owner") {
+      if (userId) query.createdBy = new Types.ObjectId(userId as string);
+      if (branchId) query.branch = new Types.ObjectId(branchId as string);
+    }
+
+    // 2. FILTER TANGGAL - PAKE getNowJakarta()
+    if (startDate && endDate) {
+      const start = dayjs
+        .tz(startDate as string, JAKARTA_TZ)
+        .startOf("day")
+        .toDate();
+      const end = dayjs
+        .tz(endDate as string, JAKARTA_TZ)
+        .endOf("day")
+        .toDate();
+      query.reportDate = { $gte: start, $lte: end };
+    } else {
+      const nowJkt = getNowJakarta();
+      const start = nowJkt.startOf("month").toDate();
+      const end = nowJkt.endOf("month").toDate();
+      query.reportDate = { $gte: start, $lte: end };
+    }
+
+    // 3. TARIK DATA
+    const reports = await LaporanHarianModel.find(query)
+      .populate("branch", "name code")
+      .populate("createdBy", "fullname username")
+      .populate("managementExpenses.createdBy", "fullname")
+      .sort({ reportDate: 1 })
+      .lean();
+
+    if (!reports.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Kaga ada data buat di-export bre",
+      });
+    }
+
+    // 4. MAPPING DATA HARIAN
+    const dataRows = reports.map((r) => ({
+      Tanggal: dayjs(r.reportDate).tz(JAKARTA_TZ).format("DD-MM-YYYY"),
+      Cabang: (r.branch as any)?.name || "-",
+      Karyawan: (r.createdBy as any)?.fullname || "-",
+      "Total Omzet": r.totalRevenue || 0,
+      "Jatah Owner (50%)": r.ownerShare || 0,
+      "Gaji Karyawan (40%)": r.employeeShare || 0,
+      "Kas Management (10%)": r.managementShare || 0,
+      "Total Jajan": (r as any).totalManagementExpenses || 0,
+      "Net Management": (r as any).managementNet || 0,
+      "WAJIB SETOR CASH": (r as any).totalCashToDeposit || 0,
+      "Rincian Jajan":
+        r.managementExpenses
+          ?.map(
+            (ex: any) =>
+              `${ex.description} (${ex.amount.toLocaleString("id-ID")})`,
+          )
+          .join(", ") || "-",
+      Catatan: r.notes || "-",
+    }));
+
+    // 5. TOTALAN PER USER
+    const userSalaries: { [key: string]: number } = {};
+    reports.forEach((r) => {
+      const name = (r.createdBy as any)?.fullname || "Unknown";
+      userSalaries[name] = (userSalaries[name] || 0) + (r.employeeShare || 0);
+    });
+
+    const userSalaryRows = Object.keys(userSalaries).map((name) => ({
+      Tanggal: "REKAP GAJI",
+      Cabang: "",
+      Karyawan: name,
+      "Total Omzet": "",
+      "Jatah Owner (50%)": "",
+      "Gaji Karyawan (40%)": userSalaries[name],
+      "Kas Management (10%)": "",
+      "Total Jajan": "",
+      "Net Management": "",
+      "WAJIB SETOR CASH": "",
+      "Rincian Jajan": `Total Gaji ${name}`,
+      Catatan: "",
+    }));
+
+    // 6. GRAND TOTAL
+    const totals = reports.reduce(
+      (acc, curr) => ({
+        omzet: acc.omzet + (curr.totalRevenue || 0),
+        owner: acc.owner + (curr.ownerShare || 0),
+        gaji: acc.gaji + (curr.employeeShare || 0),
+        kas: acc.kas + (curr.managementShare || 0),
+        jajan: acc.jajan + ((curr as any).totalManagementExpenses || 0),
+        setor: acc.setor + ((curr as any).totalCashToDeposit || 0),
+      }),
+      { omzet: 0, owner: 0, gaji: 0, kas: 0, jajan: 0, setor: 0 },
+    );
+
+    // 7. GABUNGIN SEMUA
+    const finalData = [
+      ...dataRows,
+      {}, // Baris kosong
+      { Tanggal: "--- RINCIAN GAJI PER KARYAWAN ---" },
+      ...userSalaryRows,
+      {}, // Baris kosong
+      {
+        Tanggal: "GRAND TOTAL",
+        Cabang: "",
+        Karyawan: "REKAP KESELURUHAN",
+        "Total Omzet": totals.omzet,
+        "Jatah Owner (50%)": totals.owner,
+        "Gaji Karyawan (40%)": totals.gaji,
+        "Kas Management (10%)": totals.kas,
+        "Total Jajan": totals.jajan,
+        "Net Management": "",
+        "WAJIB SETOR CASH": totals.setor,
+        "Rincian Jajan": "--- SELESAI ---",
+        Catatan: `Total Gaji Semua: ${totals.gaji.toLocaleString("id-ID")}`,
+      },
+    ];
+
+    // 8. BIKIN EXCEL
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Rekap_Lengkap");
+
+    // DEFINE COLUMNS DULU BIAR GA ERROR TS
+    worksheet.columns = [
+      { header: "Tanggal", key: "Tanggal", width: 15 },
+      { header: "Cabang", key: "Cabang", width: 20 },
+      { header: "Karyawan", key: "Karyawan", width: 25 },
+      { header: "Total Omzet", key: "Total Omzet", width: 18 },
+      { header: "Jatah Owner (50%)", key: "Jatah Owner (50%)", width: 20 },
+      { header: "Gaji Karyawan (40%)", key: "Gaji Karyawan (40%)", width: 22 },
+      {
+        header: "Kas Management (10%)",
+        key: "Kas Management (10%)",
+        width: 22,
+      },
+      { header: "Total Jajan", key: "Total Jajan", width: 15 },
+      { header: "Net Management", key: "Net Management", width: 18 },
+      { header: "WAJIB SETOR CASH", key: "WAJIB SETOR CASH", width: 20 },
+      { header: "Rincian Jajan", key: "Rincian Jajan", width: 40 },
+      { header: "Catatan", key: "Catatan", width: 30 },
+    ];
+
+    // Add data
+    worksheet.addRows(finalData);
+
+    // Auto width ulang biar lebih presisi
+    worksheet.columns.forEach((column) => {
+      if (!column.eachCell) return;
+      let maxLength = 0;
+      column.eachCell({ includeEmpty: true }, (cell) => {
+        const columnLength = cell.value ? cell.value.toString().length : 10;
+        if (columnLength > maxLength) maxLength = columnLength;
+      });
+      column.width = maxLength < 10 ? 10 : maxLength + 2;
+    });
+
+    // Styling header
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF1F2937" },
+    };
+    headerRow.alignment = { vertical: "middle", horizontal: "center" };
+
+    // Format angka
+    ["D", "E", "F", "G", "H", "I", "J"].forEach((col) => {
+      worksheet.getColumn(col).numFmt = "#,##0";
+    });
+
+    // Bold untuk baris REKAP & GRAND TOTAL
+    worksheet.eachRow((row) => {
+      const firstCell = row.getCell(1).value;
+      if (
+        firstCell === "--- RINCIAN GAJI PER KARYAWAN ---" ||
+        firstCell === "GRAND TOTAL"
+      ) {
+        row.font = { bold: true };
+        if (firstCell === "GRAND TOTAL") {
+          row.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEF3C7" },
+          };
+        }
+      }
+    });
+
+    // 9. KIRIM RESPONSE
+    const periode = startDate
+      ? dayjs.tz(startDate as string, JAKARTA_TZ).format("MMM_YYYY")
+      : getNowJakarta().format("MMM_YYYY");
+    const filename = `Rekap_Full_${periode}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error: any) {
+    console.error("ERR_EXPORT_LAPORAN:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal export laporan: " + error.message,
     });
   }
 };

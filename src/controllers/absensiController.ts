@@ -13,7 +13,7 @@ import { Types } from "mongoose";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const JAKARTA_TZ = "Asia/Jakarta";
+export const JAKARTA_TZ = "Asia/Jakarta";
 
 // =====
 // UTILS

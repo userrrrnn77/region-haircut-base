@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "target": "ESNext",
     "module": "NodeNext",
     "lib": ["ESNext"],
@@ -13,7 +14,6 @@
     "allowSyntheticDefaultImports": true,
     "noEmit": false,
     "outDir": "dist",
-    
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*", "src/*"]
