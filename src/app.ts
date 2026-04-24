@@ -10,37 +10,25 @@ import type { AuthRequest } from "./middleware/authMiddleware.js";
 const app = express();
 
 app.set("trust proxy", 1);
+app.use(morgan("dev"));
 
-// app.use((req: AuthRequest, res: Response, next: NextFunction) => {
-//   res.header("Access-Control-Allow-Origin", "*");
-//   res.header(
-//     "Access-Control-Allow-Methods",
-//     "GET,POST,PUT,DELETE,PATCH,OPTIONS",
-//   );
-//   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+// app.use(helmet());
 
-//   if (req.method === "OPTIONS") {
-//     return res.status(200).end();
-//   }
-//   next();
-// });
-
-app.use(helmet());
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"], // Tambahkan PATCH!
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"], // Tambahkan PATCH!
+    // allowedHeaders: ["Content-Type", "Authorization"],
+    // credentials: true,
   }),
 );
+
+app.options("*", (req, res) => {
+  res.status(204).end(); // Kasih tau browser: "Oke Bre, aman!"
+});
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-
-// Logger untuk development
-if (process.env.NODE_ENV !== "production") {
-  app.use(morgan("dev"));
-}
 
 // ===== Routes =====
 app.use("/api", indexRoutes);
