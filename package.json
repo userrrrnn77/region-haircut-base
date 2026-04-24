@@ -15,6 +15,9 @@
   "peerDependencies": {
     "typescript": "^5"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",
@@ -32,9 +35,13 @@
     "multer-storage-cloudinary": "^4.0.0"
   },
   "scripts": {
-    "dev": "bun --watch index.ts",
+    "dev": "bun --watch testing.ts",
     "start": "node dist/index.js",
     "build": "tsc",
     "vercel-build": "tsc"
-  }
+  },
+  "author": {
+    "name": "Rush Corp.dev"
+  },
+  "license": "MIT"
 }
