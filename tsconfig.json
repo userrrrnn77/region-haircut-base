@@ -1,25 +1,16 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
-    "target": "ESNext",
+    "target": "ES2022",
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "lib": ["ESNext"],
-    "moduleResolution": "NodeNext", 
-    "allowJs": true,
     "strict": true,
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true,
     "noEmit": false,
     "outDir": "dist",
-    "baseUrl": ".",
-    "paths": {
-      "*": ["node_modules/*", "src/*"]
-    },
-    "types": ["node"]
-  },
-  "include": ["index.ts", "src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+    "types": ["node"],
+    "allowSyntheticDefaultImports": true
+  }
 }

@@ -388,16 +388,20 @@ export const getAllAbsensi = async (req: AuthRequest, res: Response) => {
 
     let query: Record<string, any> = {};
 
-    if (startDate) {
-      if (endDate) {
-        query.absensiDayKey = { $gte: startDate, $lte: endDate };
+    const start = startDate as string | undefined
+    const end = endDate as string | undefined
+    const uname = username as string | undefined
+
+    if (start) {
+      if (end) {
+        query.absensiDayKey = { $gte: start, $lte: end };
       } else {
-        query.absensiDayKey = startDate;
+        query.absensiDayKey = start;
       }
     }
 
-    if (username) {
-      const user = await UserModel.findOne({ username });
+    if (uname) {
+      const user = await UserModel.findOne({ uname });
       if (user) {
         query.user = user._id;
       } else {

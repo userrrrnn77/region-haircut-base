@@ -1,7 +1,7 @@
 // src/controllers/laporanHarianController.ts
 
 import type { Response } from "express";
-import LaporanHarianModel from "../models/LaporanHarian.js";
+import LaporanHarianModel, { ILaporanHarian } from "../models/LaporanHarian.js";
 import AbsensiModel from "../models/Absensi.js";
 import {
   getNowJakarta,
@@ -13,6 +13,9 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
 import ExcelJS from "exceljs";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /**
  * Controller Setor Cuan Akhir Shift
@@ -81,13 +84,27 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
       }));
     }
 
+    const filter = {
+      reportDate: targetDate,
+      branch: userAbsensi.branchLocation,
+      createdBy: req.user?._id,
+    };
+
+    const update = {
+      totalRevenue: Math.round(totalRevenue),
+      notes: autoNote || "-",
+      managementExpenses: processedExpenses,
+      reportDate: targetDate, // Tetap sertakan buat upsert
+      branch: userAbsensi.branchLocation,
+      createdBy: req.user?._id,
+    };
+
     // 4. UPSERT LOGIC (Sesuai Compound Index: Date + Branch + User)
     // Otomatis itung share 50-40-10 via Pre-Save Hook di Model
-    const report = await LaporanHarianModel.findOneAndUpdate(
+    const report = (await LaporanHarianModel.findOneAndUpdate(
       {
-        reportDate: targetDate,
-        branch: userAbsensi.branchLocation,
-        createdBy: req.user?._id,
+        filter,
+        update,
       },
       {
         totalRevenue: Math.round(totalRevenue),
@@ -101,15 +118,20 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
         new: true,
         upsert: true,
         runValidators: true,
+        includeResultMetadata: false,
       },
-    );
+    ).exec()) as unknown as ILaporanHarian;
+
+    if (!report) {
+      throw new Error("Gagal dapet/bikin report, mbot!");
+    }
 
     if (lateDeduction > 0 && report) {
-      const finalEmployeeShare = report.employeeShare - lateDeduction;
-      const finalManagementShare = report.managementShare + lateDeduction;
+      const finalEmployeeShare = report.employeeShare - lateDeduction; // Property 'employeeShare' does not exist on type 'ModifyResult<ILaporanHarian>'.
+      const finalManagementShare = report.managementShare + lateDeduction; // Property 'managementShare' does not exist on type 'ModifyResult<ILaporanHarian>'.
 
       await LaporanHarianModel.updateOne(
-        { _id: report._id },
+        { _id: report._id }, // Property '_id' does not exist on type 'ModifyResult<ILaporanHarian>'.
 
         {
           $set: {
@@ -119,8 +141,8 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
         },
       );
 
-      report.employeeShare = finalEmployeeShare;
-      report.managementShare = finalManagementShare;
+      report.employeeShare = finalEmployeeShare; // Property 'employeeShare' does not exist on type 'ModifyResult<ILaporanHarian>'.
+      report.managementShare = finalManagementShare; // Property 'managementShare' does not exist on type 'ModifyResult<ILaporanHarian>'.
     }
 
     // 5. RESPONSE (Model otomatis itung employeeShare/jatah 40%)
@@ -132,8 +154,8 @@ export const saveManualReport = async (req: AuthRequest, res: Response) => {
           : "Setoran Cuan Sukses, Bre!",
       data: {
         tanggal: todayKey,
-        omzet: report.totalRevenue,
-        jatahLu: report.employeeShare,
+        omzet: report.totalRevenue, // Property 'totalRevenue' does not exist on type 'ModifyResult<ILaporanHarian>'.
+        jatahLu: report.employeeShare, // Property 'employeeShare' does not exist on type 'ModifyResult<ILaporanHarian>'.
         totalJajan: (report as any).totalManagementExpenses, // Info total pengeluaran hari ini
         branch: userAbsensi.locationSnapShot?.name || "Lokasi Terdeteksi",
         lateDeduction: lateDeduction,
