@@ -95,18 +95,22 @@ LaporanHarianSchema.pre<ILaporanHarian>("save", function () {
 LaporanHarianSchema.pre("findOneAndUpdate", function () {
   const update = this.getUpdate() as any;
 
-  if (update.reportDate) {
-    const d = new Date(update.reportDate);
+  if (!update.$set) update.$set = {};
+
+  if (update.reportDate || (update.$set && update.$set.reportDate)) {
+    const rawDate = update.reportDate || update.$set.reportDate;
+    const d = new Date(rawDate);
     d.setHours(0, 0, 0, 0);
-    update.reportDate = d;
+    update.$set.reportDate = d;
   }
 
-  // Jika revenue berubah, hitung ulang share
-  if (update.totalRevenue !== undefined) {
-    const rev = update.totalRevenue;
-    update.ownerShare = Math.floor(rev * 0.5);
-    update.employeeShare = Math.floor(rev * 0.4);
-    update.managementShare = Math.floor(rev * 0.1);
+  // Jika revenue berubah (baik di root atau di dalam $set), hitung ulang share
+  const newRevenue = update.totalRevenue ?? update.$set?.totalRevenue;
+
+  if (newRevenue !== undefined) {
+    update.$set.ownerShare = Math.floor(newRevenue * 0.5);
+    update.$set.employeeShare = Math.floor(newRevenue * 0.4);
+    update.$set.managementShare = Math.floor(newRevenue * 0.1);
   }
 });
 
