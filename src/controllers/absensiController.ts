@@ -6,7 +6,9 @@ import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
 import AbsensiModel, { type IAbsensi } from "../models/Absensi.js";
 import UserModel, { type UserDocument } from "../models/User.js";
-import BranchModel, { type IBranchLocations } from "../models/BranchLocations.js";
+import BranchModel, {
+  type IBranchLocations,
+} from "../models/BranchLocations.js";
 import { deleteFromCloudinary } from "../middleware/uploadMiddleware.js";
 import { Types } from "mongoose";
 
@@ -117,19 +119,17 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         // Setelah ditutup, lanjut proses check-in hari ini...
       } else {
         // Kalo emang masih hari yang sama, baru kita blokir
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Lu udah check-in tadi bre, sesi masih aktif!",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Lu udah check-in tadi bre, sesi masih aktif!",
+        });
       }
     }
 
     const sudahAbsen = await AbsensiModel.findOne({
       user: req.user?._id,
       absensiDayKey: todayKey,
-      type: "masuk"
+      type: "masuk",
     });
 
     if (sudahAbsen) {
@@ -163,6 +163,29 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         .status(403)
         .json({ success: false, message: "Lu Diluar Radius Kantor bre!!" });
     }
+
+    // === LOGIC TOLERANSI JUMAT (JAM 1 SIANG) ===
+    const isFriday = nowJakarta.day() === 5; // 5 itu Jumat
+    let lateDeduction = 0;
+    let lateNote = "";
+
+    // Tentukan jam patokan: Jumat jam 13:10, selain itu 12:10
+    const limitHour = isFriday ? 13 : 12;
+    const limitMinute = 10;
+
+    const limitTime = nowJakarta
+      .startOf("day")
+      .hour(limitHour)
+      .minute(limitMinute)
+      .second(0);
+
+    // Cek telat atau kaga
+    if (nowJakarta.isAfter(limitTime)) {
+      lateDeduction = 5000; // Tetap 5rb ya mbot, bukan 5jt!
+      lateNote = `(Potongan Telat - Checkin: ${nowJakarta.format("HH:mm")})`;
+    }
+
+    const finalNote = note ? `${note} ${lateNote}`.trim() : lateNote.trim();
 
     // === Absensi Key ===
 
@@ -206,12 +229,17 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         lng: longitude,
       },
       distanceFromCenter: minDistance,
-      note,
+      note: finalNote || "-",
     });
 
-    return res
-      .status(201)
-      .json({ success: true, message: "Checkin Berhasil Bre!", data: absensi });
+    return res.status(201).json({
+      success: true,
+      message: "Checkin Berhasil Bre!",
+      data: {
+        ...absensi.toObject(),
+        lateDeduction,
+      },
+    });
   } catch (error) {
     console.error("Error bre", error);
     await cleanUpAbsensiError();
@@ -388,9 +416,9 @@ export const getAllAbsensi = async (req: AuthRequest, res: Response) => {
 
     let query: Record<string, any> = {};
 
-    const start = startDate as string | undefined
-    const end = endDate as string | undefined
-    const uname = username as string | undefined
+    const start = startDate as string | undefined;
+    const end = endDate as string | undefined;
+    const uname = username as string | undefined;
 
     if (start) {
       if (end) {
